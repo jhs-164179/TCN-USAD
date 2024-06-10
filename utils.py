@@ -1,5 +1,9 @@
 import os
+import time
 import numpy as np
+import tensorflow as tf
+from keras import losses
+from keras.callbacks import Callback
 
 
 def check_path(path):
@@ -25,3 +29,25 @@ def minmax(data, min_val=None, max_val=None, norm=True):
     else:
         result = data * (max_val - min_val) + min_val
     return result
+
+
+def make_dataset(x, y, batch_size=64):
+    dataset = tf.data.Dataset.from_tensor_slices((x, y))
+    dataset = dataset.batch(
+        batch_size=batch_size
+    ).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    return dataset
+
+
+class TimeHistory(Callback):
+    def __init__(self):
+        super(TimeHistory, self).__init__()
+        self.times = []
+
+    def on_epoch_begin(self, epoch, logs={}):
+        self.epoch_start = time.time()
+
+    def on_epoch_end(self, epoch, logs={}):
+        self.times.append(time.time() - self.epoch_start)
+
+
