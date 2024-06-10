@@ -22,8 +22,9 @@ class TCN(layers.Layer):
 
     def call(self, x):
         if self.residual:
+            x_res = x
             for tcn in self.tcns:
-                x_res = tcn(x)
+                x_res = tcn(x_res)
             x = x + x_res
         else:
             for tcn in self.tcns:

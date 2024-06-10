@@ -1,7 +1,7 @@
 import time
 import tensorflow as tf
 from tensorflow.keras import Model, Sequential, layers
-from TCN import TCN
+from .TCN import TCN
 
 
 class Encoder(Model):
@@ -34,7 +34,7 @@ class Decoder(Model):
         elif mode == 'GRU':
             self.decoder.add(layers.GRU(hidden_dim, return_sequences=True))
         elif mode == 'TCN':
-            self.decoder.add(TCN(hidden_dim, kernel_size=2, dilations=dilations))
+            self.decoder.add(TCN(hidden_dim, kernel_size=2, dilations=dilations, residual=False))
         else:
             self.decoder.add(layers.Dense(hidden_dim, activation='relu'))
         self.decoder.add(layers.Dense(hidden_dim, activation='relu'))
@@ -59,6 +59,9 @@ class AE:
     def fit(self, train_data, val_data=None):
         train_loss = []
         optimizer = tf.keras.optimizers.Adam(self.learning_rate)
+
+        loss_fn = tf.keras.losses.MeanSquaredError()
+
         train_time = 0
         train_times = []
         for epoch in range(1, self.max_epochs + 1):
@@ -68,7 +71,10 @@ class AE:
                 with tf.GradientTape() as tape:
                     z = self.encoder(x)
                     preds = self.decoder(z)
-                    loss = tf.reduce_mean(tf.square(y - preds))
+
+                    # loss = tf.reduce_mean(tf.square(y - preds))
+                    loss = loss_fn(y, preds)
+
                 grad = tape.gradient(loss, self.encoder.trainable_variables + self.decoder.trainable_variables)
                 optimizer.apply_gradients(
                     zip(grad, self.encoder.trainable_variables + self.decoder.trainable_variables))
@@ -89,7 +95,10 @@ class AE:
                 for x, y in val_data:
                     z = self.encoder(x)
                     preds = self.decoder(z)
-                    loss = tf.reduce_mean(tf.square(y - preds))
+
+                    # loss = tf.reduce_mean(tf.square(y - preds))
+                    loss = loss_fn(y, preds)
+
                     v_loss.append(loss.numpy())
                 avg_v = sum(v_loss) / len(v_loss)
                 val_loss.append((avg_v))
@@ -99,9 +108,9 @@ class AE:
                 print(f'epoch {epoch} val_loss: {avg_v:.4f} | {tt:.2f} sec')
 
         if val_data is not None:
-            print(f'Train time: {train_time} | Validation time: {val_time}')
+            print(f'Train time: {train_time:.4f} | Validation time: {val_time:.4f}')
         else:
-            print(f'Train time: {train_time}')
+            print(f'Train time: {train_time:.4f}')
 
         history = {
             'train_loss': train_loss,

@@ -1,7 +1,7 @@
 import time
 import tensorflow as tf
 from tensorflow.keras import Model, Sequential, layers
-from TCN import TCN
+from .TCN import TCN
 
 
 class Encoder(Model):
@@ -114,9 +114,9 @@ class USAD:
                 print(f'epoch {epoch} val1_loss: {avg_v1:.4f} | val2_loss: {avg_v2:.4f} | {tt:.2f} sec')
 
         if val_data is not None:
-            print(f'Train time: {train_time} | Validation time: {val_time}')
+            print(f'Train time: {train_time:.4f} | Validation time: {val_time:.4f}')
         else:
-            print(f'Train time: {train_time}')
+            print(f'Train time: {train_time:.4f}')
 
         history = {
             'train_loss1': train_loss1,
