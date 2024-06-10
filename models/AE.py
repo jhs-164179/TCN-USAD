@@ -1,4 +1,5 @@
 import time
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, Sequential, layers
 from .TCN import TCN
@@ -51,7 +52,8 @@ class AE:
             max_epochs=50, learning_rate=.001
     ):
         self.encoder = Encoder(input_dim, z_dim, e_hidden_dim, dilations, mode)
-        self.decoder = Decoder(d_hidden_dim, input_dim, dilations, mode)
+        self.decoder = Decoder(d_hidden_dim, 1, dilations, mode)
+        # self.decoder = Decoder(d_hidden_dim, input_dim, dilations, mode)
 
         self.max_epochs = max_epochs
         self.learning_rate = learning_rate
@@ -73,6 +75,8 @@ class AE:
                     preds = self.decoder(z)
 
                     # loss = tf.reduce_mean(tf.square(y - preds))
+                    # print(y.shape, preds.shape)
+
                     loss = loss_fn(y, preds)
 
                 grad = tape.gradient(loss, self.encoder.trainable_variables + self.decoder.trainable_variables)
@@ -84,7 +88,7 @@ class AE:
             tt = (time.time() - train_start)
             train_times.append(tt)
             train_time += tt
-            print(f'epoch {epoch} train1_loss: {avg_t:.4f} | {tt:.2f} sec')
+            print(f'epoch {epoch} train_loss: {avg_t:.4f} | {tt:.2f} sec')
 
             if val_data is not None:
                 val_loss = []
@@ -121,3 +125,22 @@ class AE:
             history['val_time'] = val_times
 
         return history
+
+    def predict(self, data):
+        # reconstruct
+        recons = []
+        for x, y in data:
+            z = self.encoder(x)
+            preds = self.decoder(z)
+
+            recons.extend(preds.numpy())
+
+        return np.squeeze(np.array(recons))
+
+    def save(self, e_path, d_path):
+        self.encoder.save_weights(e_path)
+        self.decoder.save_weights(d_path)
+
+    def load(self, e_path, d_path):
+        self.encoder.load_weights(e_path)
+        self.decoder.load_weights(d_path)

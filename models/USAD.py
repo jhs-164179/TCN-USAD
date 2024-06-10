@@ -1,19 +1,34 @@
 import time
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, Sequential, layers
 from .TCN import TCN
 
 
 class Encoder(Model):
-    def __init__(self, input_dim, output_dim, hidden_dims=None):
+    def __init__(self, input_dim, output_dim, hidden_dims=None, dilations=None, mode='LSTM'):
         super(Encoder, self).__init__()
         if hidden_dims is None:
             hidden_dims = [input_dim // 2, input_dim // 4]
         self.encoder = Sequential()
-        for hidden_dim in hidden_dims:
-            self.encoder.add(layers.Dense(hidden_dim, activation='relu'))
-        self.encoder.add(layers.Dense(output_dim, activation='relu'))
-        self._set_inputs(tf.TensorSpec([None, input_dim], tf.float32, name='input'))
+        if mode == 'LSTM':
+            self.encoder.add(layers.LSTM(output_dim, return_sequences=False))
+            # self.encoder.add(layers.RepeatVector(input_dim))
+        elif mode == 'GRU':
+            self.encoder.add(layers.GRU(output_dim, return_sequences=False))
+            # self.encoder.add(layers.RepeatVector(input_dim))
+        elif mode == 'TCN':
+            # hidden_dims != list
+            self.encoder.add(TCN(hidden_dims, kernel_size=2, dilations=dilations))
+            self.encoder.add(layers.Flatten())
+            self.encoder.add(layers.Dense(output_dim, activation='relu'))
+            # self.encoder.add(layers.RepeatVector(input_dim))
+        else:
+            # hidden_dims == list
+            for hidden_dim in hidden_dims:
+                self.encoder.add(layers.Dense(hidden_dim, activation='relu'))
+            self.encoder.add(layers.Dense(output_dim, activation='relu'))
+            self._set_inputs(tf.TensorSpec([None, input_dim], tf.float32, name='input'))
 
     def call(self, x):
         x = self.encoder(x)
@@ -21,14 +36,34 @@ class Encoder(Model):
 
 
 class Decoder(Model):
-    def __init__(self, output_dim, hidden_dims=None):
+    def __init__(self, input_dim, output_dim, hidden_dims=None, dilations=None, mode='LSTM'):
         super(Decoder, self).__init__()
         if hidden_dims is None:
             hidden_dims = [output_dim // 4, output_dim // 2]
         self.decoder = Sequential()
-        for hidden_dim in hidden_dims:
-            self.decoder.add(layers.Dense(hidden_dim, activation='relu'))
-        self.decoder.add(layers.Dense(output_dim, activation='sigmoid'))
+        if mode == 'LSTM':
+            # hidden_dims != list
+            self.decoder.add(layers.RepeatVector(input_dim))
+            self.decoder.add(layers.LSTM(hidden_dims, return_sequences=True))
+            self.decoder.add(layers.Dense(hidden_dims, activation='relu'))
+            self.decoder.add(layers.TimeDistributed(layers.Dense(output_dim, activation='sigmoid')))
+        elif mode == 'GRU':
+            # hidden_dims != list
+            self.decoder.add(layers.RepeatVector(input_dim))
+            self.decoder.add(layers.GRU(hidden_dims, return_sequences=True))
+            self.decoder.add(layers.Dense(hidden_dims, activation='relu'))
+            self.decoder.add(layers.TimeDistributed(layers.Dense(output_dim, activation='sigmoid')))
+        elif mode == 'TCN':
+            # hidden_dims != list
+            self.decoder.add(layers.RepeatVector(input_dim))
+            self.decoder.add(TCN(hidden_dims, kernel_size=2, dilations=dilations, residual=False))
+            self.decoder.add(layers.Dense(hidden_dims, activation='relu'))
+            self.decoder.add(layers.TimeDistributed(layers.Dense(output_dim, activation='sigmoid')))
+        else:
+            # hidden_dims == list
+            for hidden_dim in hidden_dims:
+                self.decoder.add(layers.Dense(hidden_dim, activation='relu'))
+            self.decoder.add(layers.Dense(output_dim, activation='sigmoid'))
 
     def call(self, x):
         x = self.decoder(x)
@@ -37,12 +72,16 @@ class Decoder(Model):
 
 class USAD:
     def __init__(
-            self, input_dim, z_dim, e_hidden_dims, d_hidden_dims,
+            self, input_dim, z_dim, e_hidden_dims, d_hidden_dims, dilations=None, mode='LSTM',
             max_epochs=50, learning_rate=.001
     ):
-        self.encoder = Encoder(input_dim, z_dim, e_hidden_dims)
-        self.decoder_G = Decoder(input_dim, d_hidden_dims)
-        self.decoder_D = Decoder(input_dim, d_hidden_dims)
+        self.encoder = Encoder(input_dim, z_dim, e_hidden_dims, mode=mode)
+        if mode == 'Dense':
+            self.decoder_G = Decoder(input_dim, input_dim, d_hidden_dims, mode=mode)
+            self.decoder_D = Decoder(input_dim, input_dim, d_hidden_dims, mode=mode)
+        else:
+            self.decoder_G = Decoder(input_dim, 1, d_hidden_dims, dilations=dilations, mode=mode)
+            self.decoder_D = Decoder(input_dim, 1, d_hidden_dims, dilations=dilations, mode=mode)
 
         self.max_epochs = max_epochs
         self.learning_rate = learning_rate
@@ -64,6 +103,9 @@ class USAD:
                     preds_G = self.decoder_G(z)
                     preds_D = self.decoder_D(z)
                     preds_GD = self.decoder_D(self.encoder(preds_G))
+
+                    # print(y.shape, preds_G.shape, preds_D.shape, preds_GD.shape)
+
                     loss1 = (1 / epoch) * tf.reduce_mean((y - preds_G) ** 2) + (1 - 1 / epoch) * tf.reduce_mean(
                         (y - preds_GD) ** 2)
                     loss2 = (1 / epoch) * tf.reduce_mean((y - preds_D) ** 2) - (1 - 1 / epoch) * tf.reduce_mean(
@@ -129,3 +171,42 @@ class USAD:
             history['val_time'] = val_times
 
         return history
+
+    def predict(self, data, alpha=1., beta=0.):
+        # anomaly score
+        scores = []
+        for x, y in data:
+            z = self.encoder(x)
+            preds_G = self.decoder_G(z)
+            preds_D = self.decoder_D(z)
+            preds_GD = self.decoder_D(self.encoder(preds_G))
+
+            batch_scores = alpha * ((y - preds_G) ** 2) + beta * ((y - preds_GD) ** 2)
+            scores.extend(batch_scores.numpy())
+
+        return np.squeeze(np.array(scores))
+
+    def reconstruct(self, data):
+        # reconstruct
+        recons_G = []
+        recons_GD = []
+        for x, y in data:
+            z = self.encoder(x)
+            preds_G = self.decoder_G(z)
+            preds_D = self.decoder_D(z)
+            preds_GD = self.decoder_D(self.encoder(preds_G))
+
+            recons_G.extend(preds_G.numpy())
+            recons_GD.extend(preds_GD.numpy())
+
+        return np.squeeze(np.array(recons_G)), np.squeeze(np.array(recons_GD))
+
+    def save(self, e_path, d_G_path, d_D_path):
+        self.encoder.save_weights(e_path)
+        self.decoder_G.save_weights(d_G_path)
+        self.decoder_D.save_weights(d_D_path)
+
+    def load(self, e_path, d_G_path, d_D_path):
+        self.encoder.load_weights(e_path)
+        self.decoder_G.load_weights(d_G_path)
+        self.decoder_D.load_weights(d_D_path)
