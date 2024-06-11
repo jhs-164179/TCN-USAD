@@ -1,5 +1,6 @@
 import os
 import time
+import pickle
 import numpy as np
 import tensorflow as tf
 from keras import losses
@@ -51,3 +52,38 @@ class TimeHistory(Callback):
         self.times.append(time.time() - self.epoch_start)
 
 
+def save_hist(hist, train_time, path):
+    dic = {
+        'history': hist.history,
+        'train_time': train_time.times
+    }
+    with open(path, 'wb') as f:
+        pickle.dump(dic, f)
+
+def open_hist(path):
+    with open(path, 'rb') as f:
+        hist = pickle(f)
+    return hist
+
+# For testing reconstruction performance
+def calculate_recon():
+    pass
+
+# For USAD models
+def calculate_anomaly_score(model, data, alpha=1., beta=0.):
+    scores = []
+    for x, y in data:
+        preds_G, _, preds_GD = model(x)
+        score = alpha * ((y - preds_G) ** 2) + beta * ((y - preds_GD) ** 2)
+        scores.extend(score.numpy())
+    return np.squeeze(np.array(scores))
+
+
+def reconstruct(model, data):
+    recon_G = []
+    recon_GD = []
+    for x, _ in data:
+        preds_G, _, preds_GD = model(x)
+        recon_G.extend(preds_G.numpy())
+        recon_GD.extend(preds_GD.numpy())
+    return np.squeeze(np.array(recon_G)), np.squeeze(np.array(recon_GD))
