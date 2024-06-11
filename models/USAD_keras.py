@@ -16,6 +16,18 @@ class Encoder(Model):
                 for hidden_dim in hidden_dims
             ])
             self.encoder.add(layers.Dense(z_dim, activation='relu'))
+        elif mode == 'LSTM':
+            # LSTM-USAD
+            self.encoder = Sequential([
+                layers.LSTM(z_dim, return_sequences=False),
+                layers.RepeatVector(seq_len)
+            ])
+        elif mode == 'GRU':
+            # GRU-USAD
+            self.encoder = Sequential([
+                layers.GRU(z_dim, return_sequences=False),
+                layers.RepeatVector(seq_len)
+            ])
         else:
             # TCN-USAD | hidden_dims : int
             if dilations is None:
@@ -45,6 +57,20 @@ class Decoder(Model):
                 for hidden_dim in hidden_dims
             ])
             self.decoder.add(layers.Dense(output_dim, activation='sigmoid'))
+        elif mode == 'LSTM':
+            # LSTM-USAD
+            self.decoder = Sequential([
+                layers.LSTM(hidden_dims, return_sequences=True),
+                layers.Dense(hidden_dims, activation='relu'),
+                layers.TimeDistributed(layers.Dense(output_dim, activation='sigmoid'))
+            ])
+        elif mode == 'GRU':
+            # GRU-USAD
+            self.decoder = Sequential([
+                layers.GRU(hidden_dims, return_sequences=True),
+                layers.Dense(hidden_dims, activation='relu'),
+                layers.TimeDistributed(layers.Dense(output_dim, activation='sigmoid'))
+            ])
         else:
             # TCN-USAD | hidden_dims : int
             if dilations is None:
@@ -75,7 +101,7 @@ class USAD_keras(Model):
             self.decoder_G = Decoder(output_dim, seq_len, hidden_dims[::-1], dilations, mode)
             self.decoder_D = Decoder(output_dim, seq_len, hidden_dims[::-1], dilations, mode)
         else:
-            # TCN-USAD | hidden_dims : int
+            # (LSTM, GRU, TCN)-USAD | hidden_dims : int
             self.decoder_G = Decoder(output_dim, seq_len, hidden_dims, dilations, mode)
             self.decoder_D = Decoder(output_dim, seq_len, hidden_dims, dilations, mode)
         
