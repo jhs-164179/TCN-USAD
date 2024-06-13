@@ -62,7 +62,7 @@ def save_hist(hist, train_time, path):
 
 def open_hist(path):
     with open(path, 'rb') as f:
-        hist = pickle(f)
+        hist = pickle.load(f)
     return hist
 
 # For testing reconstruction performance

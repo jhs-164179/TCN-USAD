@@ -119,8 +119,8 @@ class USAD_keras(Model):
 
         self.g_optimizer = g_optimizer
         self.d_optimizer = d_optimizer
-        self.g_loss = USAD_Loss()
-        self.d_loss = USAD_Loss()
+        self.g_loss = USAD_Loss1()
+        self.d_loss = USAD_Loss2()
 
     def call(self, x):
         z = self.encoder(x)
@@ -175,13 +175,24 @@ class USAD_keras(Model):
         }
 
 
-class USAD_Loss(losses.Loss):
+class USAD_Loss1(losses.Loss):
     def __init__(self):
-        super(USAD_Loss, self).__init__()
+        super(USAD_Loss1, self).__init__()
 
     def call(self, y_true, y_pred, preds_GD, alpha=.5, beta=.5):
         a_mse = tf.reduce_mean(tf.square(y_true - y_pred))
         b_mse = tf.reduce_mean(tf.square(y_true - preds_GD))
         loss = alpha * a_mse + beta * b_mse        
+        return loss
+    
+
+class USAD_Loss2(losses.Loss):
+    def __init__(self):
+        super(USAD_Loss2, self).__init__()
+
+    def call(self, y_true, y_pred, preds_GD, alpha=.5, beta=.5):
+        a_mse = tf.reduce_mean(tf.square(y_true - y_pred))
+        b_mse = tf.reduce_mean(tf.square(y_true - preds_GD))
+        loss = alpha * a_mse - beta * b_mse        
         return loss
     

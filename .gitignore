@@ -167,3 +167,6 @@ jhs/
 
 # # Saved model weights
 # save/
+
+# itrust dataset
+itrust_EPIC/
