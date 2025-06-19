@@ -1,5 +1,5 @@
 # TCN-USAD
-![image](https://github.com/user-attachments/assets/75b7c0d8-c7ae-4513-8e67-901de17195e5)
+![image](https://github.com/user-attachments/assets/75b7c0d8-c7ae-4513-8e67-901de17195e5) <br>
 An implmentation of "TCN-USAD for Anomaly Power Detection"
 **[[Paper](https://doi.org/10.30693/SMJ.2024.13.7.9)]**<br>
 
